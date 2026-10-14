@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "shopify-shopping": {
+      "serverUrl": "https://REPLACE-WITH-YOUR-HOST.example.com/mcp"
+    }
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "shopify-shopping",
+  "description": "Search a live Shopify product catalog by natural-language shopping requirements: product type, price, colour, size and availability."
+}

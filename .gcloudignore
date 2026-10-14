@@ -1,0 +1,26 @@
+# Controls what `gcloud run deploy --source .` uploads to Cloud Build.
+#
+# WITHOUT this file gcloud falls back to .gitignore, which is easy to get wrong.
+# Being explicit matters: anything listed here never leaves your machine, and
+# .env holds the Shopify Admin token — it must never reach a build log or the
+# Cloud Build source bucket. Secrets are injected at runtime from Secret Manager.
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+node_modules
+dist
+coverage
+tests
+
+.DS_Store
+.idea
+.vscode
+*.log
+npm-debug.log*
+
+# Not needed to build the image.
+eslint.config.js
+tsconfig.test.json

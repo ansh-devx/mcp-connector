@@ -1,0 +1,49 @@
+{
+  "name": "mcp-connector",
+  "version": "1.0.0",
+  "description": "MCP server and REST connector for a Shopify store: natural-language product search over the Shopify Admin GraphQL API.",
+  "type": "module",
+  "main": "dist/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json && chmod +x dist/mcp/stdio.js",
+    "start": "node dist/server.js",
+    "test": "tsx --test tests/*.test.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "mcp": "tsx src/mcp/stdio.ts",
+    "mcp:start": "node dist/mcp/stdio.js",
+    "mcp:inspect": "npx -y @modelcontextprotocol/inspector tsx src/mcp/stdio.ts"
+  },
+  "keywords": [
+    "shopify",
+    "connector",
+    "ai",
+    "product-search",
+    "mcp",
+    "model-context-protocol",
+    "claude"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.0",
+    "@shopify/admin-api-client": "^1.0.8",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.20.0",
+    "@types/node": "^22.13.1",
+    "eslint": "^9.20.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.23.0"
+  },
+  "bin": {
+    "shopify-mcp-connector": "dist/mcp/stdio.js"
+  }
+}
