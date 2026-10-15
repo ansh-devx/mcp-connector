@@ -37,6 +37,12 @@ export interface AppConfig {
     readonly host: string;
     readonly logLevel: string;
   };
+  readonly rateLimit: {
+    /** Largest burst one caller may make. 0 disables rate limiting entirely. */
+    readonly max: number;
+    /** Window the `max` refills over, in seconds. */
+    readonly windowSeconds: number;
+  };
   /** When null, API-key auth is disabled (local development). */
   readonly connectorApiKey: string | null;
   readonly nodeEnv: string;
@@ -72,6 +78,16 @@ function readPort(raw: string | undefined, fallback: number): number {
     throw new ConfigError(`PORT must be an integer between 1 and 65535, received "${raw}"`);
   }
   return port;
+}
+
+/** Non-negative integer env var; 0 is meaningful (it disables rate limiting). */
+function readCount(raw: string | undefined, fallback: number, name: string): number {
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new ConfigError(`${name} must be a non-negative integer, received "${raw}"`);
+  }
+  return value;
 }
 
 function buildConfig(): AppConfig {
@@ -121,6 +137,14 @@ function buildConfig(): AppConfig {
       port: readPort(readEnv(['PORT']), 3000),
       host: readEnv(['HOST']) ?? '0.0.0.0',
       logLevel: readEnv(['LOG_LEVEL']) ?? 'info',
+    },
+    rateLimit: {
+      // Default 0 = off, so adding this release changes no existing behaviour.
+      max: readCount(readEnv(['RATE_LIMIT_MAX']), 0, 'RATE_LIMIT_MAX'),
+      windowSeconds: Math.max(
+        1,
+        readCount(readEnv(['RATE_LIMIT_WINDOW_SECONDS']), 60, 'RATE_LIMIT_WINDOW_SECONDS'),
+      ),
     },
     connectorApiKey: readEnv(['CONNECTOR_API_KEY']) ?? null,
     nodeEnv: readEnv(['NODE_ENV']) ?? 'development',

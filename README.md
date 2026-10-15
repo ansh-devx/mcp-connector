@@ -119,6 +119,8 @@ cp .env.example .env
 | `HOST` | no | `0.0.0.0` | Bind address |
 | `LOG_LEVEL` | no | `info` | pino log level |
 | `CONNECTOR_API_KEY` | no | *(unset)* | When set, every `/api`, `/connector` and `/mcp` call needs `Authorization: Bearer <key>`. Leave empty to disable auth locally. Does not apply to stdio, which is already a private channel. |
+| `RATE_LIMIT_MAX` | no | `0` (off) | Max requests per IP per window on the Shopify-backed endpoints. |
+| `RATE_LIMIT_WINDOW_SECONDS` | no | `60` | Window the `RATE_LIMIT_MAX` budget refills over. |
 
 `SHOPIFY_STORE` and `SHOPIFY_ACCESS_TOKEN` are accepted as aliases for the first two.
 
@@ -606,6 +608,7 @@ automatically as server `instructions`):
 * The MCP HTTP transport is stateless — a fresh transport and server per request,
   so concurrent clients cannot collide on request ids or observe each other.
 * Request bodies are capped at 256 KB.
+* Optional per-IP rate limiting via `RATE_LIMIT_MAX` — see below.
 
 ```bash
 CONNECTOR_API_KEY=my-secret npm start
@@ -614,6 +617,49 @@ curl -X POST http://localhost:3000/api/search-products \
   -H 'Content-Type: application/json' \
   -d '{"query":"shirt"}'
 ```
+
+## Rate limiting
+
+Off by default (`RATE_LIMIT_MAX=0`). **Turn it on before exposing the service
+publicly.** Shopify's Admin API is cost-based rate limited, so an unthrottled caller
+can exhaust the store's budget and get the *storefront* throttled too — the blast
+radius is wider than this service.
+
+```bash
+RATE_LIMIT_MAX=60 RATE_LIMIT_WINDOW_SECONDS=60 npm start   # 60 req/min per IP
+```
+
+A **token bucket**, not a fixed window: a fixed window lets a caller spend the whole
+quota at 59.9s and again at 60.1s, so the real burst is double what you configured.
+A bucket refills continuously, so the long-run rate *and* the burst ceiling are both
+exactly `RATE_LIMIT_MAX`.
+
+**What is throttled:** `/api/search-products`, `/api/products/:id`,
+`/connector/tools/:name`, `/mcp` — everything that reaches Shopify.
+**What is not:** `/health`, `/`, `/openapi.json`, `/connector/tools`. These are static
+or operational, and throttling `/health` would break deploy probes.
+
+Every response carries the budget, so a well-behaved agent can back off before it is
+rejected:
+
+```
+RateLimit-Limit: 60
+RateLimit-Remaining: 59
+RateLimit-Reset: 1
+```
+
+On rejection: **429** plus `Retry-After` (always at least 1 second — a `Retry-After: 0`
+just invites a hot retry loop). `/mcp` gets a JSON-RPC shaped body so MCP clients can
+parse it; everything else gets the usual `{ "error": { "code": "RATE_LIMITED", ... } }`.
+
+### Two limits worth knowing
+
+* **Per-process state.** On Cloud Run with N warm instances the effective global limit
+  is N x `RATE_LIMIT_MAX`. That bounds abuse, but it is not a quota system — that needs
+  shared storage (Redis) and is not worth it at this scale.
+* **Keyed by IP** (`request.ip`, which honours `X-Forwarded-For` because `trustProxy`
+  is on). Callers behind one NAT, or arriving from one cloud egress range, share a
+  bucket. Sizing the limit per *client* rather than per *user* is the right mental model.
 
 ## Deploy
 
@@ -655,9 +701,9 @@ Honest list of what this does not do yet.
   first 100 by Shopify relevance. There is no cursor.
 * **`total` is the result count, not the match count.** It equals `products.length`;
   it does not tell you how many products in the catalog matched.
-* **No caching and no inbound rate limiting.** Every tool call reaches the Shopify
-  Admin API, which is cost-based rate limited. Fix this before exposing the server
-  publicly.
+* **No response caching.** Every tool call reaches the Shopify Admin API. Rate
+  limiting now bounds abuse, but a cache would cut normal consumption too — repeat
+  searches re-query Shopify every time.
 * **No readiness probe against Shopify.** `GET /health` is deliberately
   dependency-free. `fetchShop()` exists in `src/shopify/service.ts` and is unused —
   it is what a `/ready` endpoint would call.

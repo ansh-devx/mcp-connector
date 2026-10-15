@@ -7,6 +7,7 @@ import { healthRoutes } from './routes/health.js';
 import { productRoutes, type ProductRouteOptions } from './routes/products.js';
 import { searchRoutes, type SearchRouteOptions } from './routes/search.js';
 import { apiKeyGuard } from './utils/auth.js';
+import { rateLimitGuard } from './utils/rate-limit-hook.js';
 import { isAppError, redactSecrets } from './utils/errors.js';
 
 export interface BuildAppOptions {
@@ -46,6 +47,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
 
   app.addHook('onRequest', apiKeyGuard);
+  // After the auth guard: an unauthenticated caller should not be able to spend
+  // another caller's quota just by hammering the endpoint with a bad key.
+  app.addHook('onRequest', rateLimitGuard);
 
   app.setNotFoundHandler((request, reply) => {
     reply.status(404).send({
